@@ -149,7 +149,7 @@ pub fn main() !void {
         // Get updates
         const updates = telegram.methods.getUpdates(&bot, offset, limit, timeout) catch |err| {
             std.debug.print("❌ Failed to get updates: {}\n", .{err});
-            std.time.sleep(5 * std.time.ns_per_s);
+            std.Thread.sleep(5 * std.time.ns_per_s);
             continue;
         };
         defer {
@@ -178,7 +178,7 @@ pub fn main() !void {
         }
 
         if (updates.len == 0) {
-            std.time.sleep(1 * std.time.ns_per_s);
+            std.Thread.sleep(1 * std.time.ns_per_s);
         }
     }
 }
@@ -1290,7 +1290,7 @@ fn testChatActions(bot: *telegram.Bot, chat_id: i64, bot_stats: *BotStats) !void
         const action_text = try std.fmt.bufPrint(&action_buffer, "✅ {s}", .{action});
         try sendMessage(bot, chat_id, action_text, bot_stats);
 
-        std.time.sleep(2 * std.time.ns_per_s);
+        std.Thread.sleep(2 * std.time.ns_per_s);
     }
 
     try sendMessage(bot, chat_id, "🎯 Chat actions test completed!", bot_stats);
@@ -1499,7 +1499,7 @@ fn testEditMessage(bot: *telegram.Bot, chat_id: i64, bot_stats: *BotStats) !void
     bot_stats.recordSent();
 
     // Wait 3 seconds
-    std.time.sleep(3 * std.time.ns_per_s);
+    std.Thread.sleep(3 * std.time.ns_per_s);
 
     // Edit the message
     var edited = telegram.methods.editMessageText(bot, chat_id, original.message_id, "✅ Message successfully edited! Edit functionality working.") catch |err| {
@@ -1537,7 +1537,7 @@ fn testPinMessage(bot: *telegram.Bot, chat_id: i64, bot_stats: *BotStats) !void 
         try sendMessage(bot, chat_id, "✅ Message pinned successfully!", bot_stats);
 
         // Wait and then unpin
-        std.time.sleep(3 * std.time.ns_per_s);
+        std.Thread.sleep(3 * std.time.ns_per_s);
 
         const unpin_result = telegram.methods.unpinChatMessage(bot, chat_id, message_to_pin.message_id) catch |err| {
             var error_buffer: [128]u8 = undefined;

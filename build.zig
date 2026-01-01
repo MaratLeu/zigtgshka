@@ -31,11 +31,14 @@ pub fn build(b: *std.Build) void {
     // Now, we will create a static library based on the module we created above.
     // This creates a `std.Build.Step.Compile`, which is the build step responsible
     // for actually invoking the compiler.
-    const lib = b.addStaticLibrary(.{
+    const lib = b.addLibrary(.{
         .name = "telegram-bot-api",
-        .root_source_file = b.path("src/telegram.zig"),
-        .target = target,
-        .optimize = optimize,
+        .linkage = .static,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/telegram.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
     });
     lib.linkLibC();
 
@@ -47,9 +50,11 @@ pub fn build(b: *std.Build) void {
     // Creates a step for unit testing. This only builds the test executable
     // but does not run it.
     const main_tests = b.addTest(.{
-        .root_source_file = b.path("src/telegram.zig"),
-        .target = target,
-        .optimize = optimize,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/telegram.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
     });
     main_tests.linkLibC();
 
@@ -57,9 +62,11 @@ pub fn build(b: *std.Build) void {
 
     // Add tests for json.zig module
     const json_tests = b.addTest(.{
-        .root_source_file = b.path("src/json.zig"),
-        .target = target,
-        .optimize = optimize,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/json.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
     });
     json_tests.linkLibC();
 
@@ -67,9 +74,11 @@ pub fn build(b: *std.Build) void {
 
     // Add tests for utils.zig module (if it has tests)
     const utils_tests = b.addTest(.{
-        .root_source_file = b.path("src/utils.zig"),
-        .target = target,
-        .optimize = optimize,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/utils.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
     });
     utils_tests.linkLibC();
 
@@ -122,10 +131,13 @@ pub fn build(b: *std.Build) void {
     for (examples) |example| {
         const exe_example = b.addExecutable(.{
             .name = example.name,
-            .root_source_file = b.path(example.file),
-            .target = target,
-            .optimize = optimize,
+            .root_module = b.createModule(.{
+                .root_source_file = b.path(example.file),
+                .target = target,
+                .optimize = optimize,
+            }),
         });
+
         exe_example.root_module.addImport("telegram", lib_mod);
         exe_example.linkLibC();
         b.installArtifact(exe_example);
@@ -145,10 +157,14 @@ pub fn build(b: *std.Build) void {
     const run_echo_step = b.step("run-example", "Run the echo bot example (alias for run-echo_bot)");
     const echo_exe = b.addExecutable(.{
         .name = "echo-bot-compat",
-        .root_source_file = b.path("examples/echo_bot.zig"),
-        .target = target,
-        .optimize = optimize,
+
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("examples/echo_bot.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
     });
+
     echo_exe.root_module.addImport("telegram", lib_mod);
     echo_exe.linkLibC();
 

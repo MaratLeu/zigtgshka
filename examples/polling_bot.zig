@@ -59,7 +59,7 @@ pub fn main() !void {
         const updates = telegram.methods.getUpdates(&bot, offset, limit, timeout) catch |err| {
             std.debug.print("❌ Failed to get updates: {}\n", .{err});
             // Wait a bit before retrying
-            std.time.sleep(5 * std.time.ns_per_s);
+            std.Thread.sleep(5 * std.time.ns_per_s);
             continue;
         };
         defer {
@@ -104,7 +104,7 @@ pub fn main() !void {
 
         // If no updates, add a small delay
         if (updates.len == 0) {
-            std.time.sleep(1 * std.time.ns_per_s);
+            std.Thread.sleep(1 * std.time.ns_per_s);
         }
     }
 }

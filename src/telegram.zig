@@ -292,10 +292,7 @@ pub const Bot = struct {
         defer self.allocator.free(url);
 
         const uri = try std.Uri.parse(url);
-        var server_header_buffer: [8192]u8 = undefined;
-
-        var req = try self.client.client.open(.POST, uri, .{
-            .server_header_buffer = &server_header_buffer,
+        var req = try self.client.client.request(.POST, uri, .{
             .extra_headers = &[_]std.http.Header{
                 .{ .name = "Content-Type", .value = "application/json" },
             },
@@ -314,16 +311,15 @@ pub const Bot = struct {
 
         if (json_str.len > 2) { // More than just "{}"
             req.transfer_encoding = .{ .content_length = json_str.len };
-            try req.send();
-            try req.writeAll(json_str);
+            try req.sendBodyComplete(try self.allocator.dupe(u8, json_str));
         } else {
-            try req.send();
+            try req.sendBodiless();
         }
 
-        try req.finish();
-        try req.wait();
+        //try req.finish();
+        //try req.wait();
 
-        const body = try req.reader().readAllAlloc(self.allocator, std.math.maxInt(usize));
+        const body = try req.reader.interface.readAlloc(self.allocator, std.math.maxInt(usize));
         return body;
     }
 

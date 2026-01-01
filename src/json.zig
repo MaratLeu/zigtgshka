@@ -63,11 +63,11 @@ pub const JSONError = error{
 /// // json_str = {"name":"John","age":30,"active":true}
 /// ```
 pub fn marshal(allocator: Allocator, value: anytype) ![]const u8 {
-    var result = std.ArrayList(u8).init(allocator);
-    errdefer result.deinit();
+    var result: std.ArrayList(u8) = .empty;
+    errdefer result.deinit(allocator);
 
     try marshalValue(allocator, &result, value);
-    return result.toOwnedSlice();
+    return result.toOwnedSlice(allocator);
 }
 
 /// Unmarshal JSON string to a Zig type
@@ -226,33 +226,33 @@ fn marshalValue(allocator: Allocator, result: *std.ArrayList(u8), value: anytype
     switch (type_info) {
         .bool => {
             if (value) {
-                try result.appendSlice("true");
+                try result.appendSlice(allocator, "true");
             } else {
-                try result.appendSlice("false");
+                try result.appendSlice(allocator, "false");
             }
         },
         .int, .comptime_int => {
-            try result.writer().print("{d}", .{value});
+            try result.writer(allocator).print("{d}", .{value});
         },
         .float, .comptime_float => {
-            try result.writer().print("{d}", .{value});
+            try result.writer(allocator).print("{d}", .{value});
         },
         .pointer => |ptr_info| {
             switch (ptr_info.size) {
                 .slice => {
                     if (ptr_info.child == u8) {
                         // String slice
-                        try result.append('"');
-                        try appendEscapedString(result, value);
-                        try result.append('"');
+                        try result.append(allocator, '"');
+                        try appendEscapedString(allocator, result, value);
+                        try result.append(allocator, '"');
                     } else {
                         // Array slice
-                        try result.append('[');
+                        try result.append(allocator, '[');
                         for (value, 0..) |item, i| {
-                            if (i > 0) try result.append(',');
+                            if (i > 0) try result.append(allocator, ',');
                             try marshalValue(allocator, result, item);
                         }
-                        try result.append(']');
+                        try result.append(allocator, ']');
                     }
                 },
                 .one => {
@@ -265,28 +265,28 @@ fn marshalValue(allocator: Allocator, result: *std.ArrayList(u8), value: anytype
         .array => |array_info| {
             if (array_info.child == u8) {
                 // String array (treat as string)
-                try result.append('"');
-                try appendEscapedString(result, value[0..]);
-                try result.append('"');
+                try result.append(allocator, '"');
+                try appendEscapedString(allocator, result, value[0..]);
+                try result.append(allocator, '"');
             } else {
                 // Regular array
-                try result.append('[');
+                try result.append(allocator, '[');
                 for (value, 0..) |item, i| {
-                    if (i > 0) try result.append(',');
+                    if (i > 0) try result.append(allocator, ',');
                     try marshalValue(allocator, result, item);
                 }
-                try result.append(']');
+                try result.append(allocator, ']');
             }
         },
         .optional => {
             if (value) |val| {
                 try marshalValue(allocator, result, val);
             } else {
-                try result.appendSlice("null");
+                try result.appendSlice(allocator, "null");
             }
         },
         .@"struct" => |struct_info| {
-            try result.append('{');
+            try result.append(allocator, '{');
             var first = true;
 
             inline for (struct_info.fields) |field| {
@@ -302,12 +302,12 @@ fn marshalValue(allocator: Allocator, result: *std.ArrayList(u8), value: anytype
                     true;
 
                 if (should_include_field) {
-                    if (!first) try result.append(',');
+                    if (!first) try result.append(allocator, ',');
 
                     // Add field name
-                    try result.append('"');
-                    try result.appendSlice(field.name);
-                    try result.appendSlice("\":");
+                    try result.append(allocator, '"');
+                    try result.appendSlice(allocator, field.name);
+                    try result.appendSlice(allocator, "\":");
 
                     // Add field value
                     try marshalValue(allocator, result, field_value);
@@ -315,13 +315,13 @@ fn marshalValue(allocator: Allocator, result: *std.ArrayList(u8), value: anytype
                 }
             }
 
-            try result.append('}');
+            try result.append(allocator, '}');
         },
         .@"enum" => {
             // Marshal enum as string
-            try result.append('"');
-            try result.appendSlice(@tagName(value));
-            try result.append('"');
+            try result.append(allocator, '"');
+            try result.appendSlice(allocator, @tagName(value));
+            try result.append(allocator, '"');
         },
         else => return JSONError.UnsupportedType,
     }
@@ -504,18 +504,18 @@ fn valueToString(allocator: Allocator, value: anytype) ![]const u8 {
 }
 
 /// Append an escaped string to the result
-fn appendEscapedString(result: *std.ArrayList(u8), str: []const u8) !void {
+fn appendEscapedString(allocator: Allocator, result: *std.ArrayList(u8), str: []const u8) !void {
     for (str) |char| {
         switch (char) {
-            '"' => try result.appendSlice("\\\""),
-            '\\' => try result.appendSlice("\\\\"),
-            '\n' => try result.appendSlice("\\n"),
-            '\r' => try result.appendSlice("\\r"),
-            '\t' => try result.appendSlice("\\t"),
-            '\x08' => try result.appendSlice("\\b"), // backspace
-            '\x0C' => try result.appendSlice("\\f"), // form feed
-            0x00...0x07, 0x0B, 0x0E...0x1F => try result.writer().print("\\u{x:0>4}", .{char}), // Other control chars
-            else => try result.append(char),
+            '"' => try result.appendSlice(allocator, "\\\""),
+            '\\' => try result.appendSlice(allocator, "\\\\"),
+            '\n' => try result.appendSlice(allocator, "\\n"),
+            '\r' => try result.appendSlice(allocator, "\\r"),
+            '\t' => try result.appendSlice(allocator, "\\t"),
+            '\x08' => try result.appendSlice(allocator, "\\b"), // backspace
+            '\x0C' => try result.appendSlice(allocator, "\\f"), // form feed
+            0x00...0x07, 0x0B, 0x0E...0x1F => try result.writer(allocator).print("\\u{x:0>4}", .{char}), // Other control chars
+            else => try result.append(allocator, char),
         }
     }
 }
@@ -585,30 +585,30 @@ fn needsAllocation(value: anytype) bool {
 /// // json = {"chat_id":"123","text":"Hello"}
 /// ```
 pub fn marshalStringHashMap(allocator: Allocator, map: std.StringHashMap([]const u8)) ![]const u8 {
-    var result = std.ArrayList(u8).init(allocator);
-    errdefer result.deinit();
+    var result: std.ArrayList(u8) = .empty;
+    errdefer result.deinit(allocator);
 
-    try result.append('{');
+    try result.append(allocator, '{');
     var first = true;
     var iterator = map.iterator();
     while (iterator.next()) |entry| {
-        if (!first) try result.append(',');
+        if (!first) try result.append(allocator, ',');
 
         // Add key (always quoted and escaped)
-        try result.append('"');
-        try appendEscapedString(&result, entry.key_ptr.*);
-        try result.appendSlice("\":");
+        try result.append(allocator, '"');
+        try appendEscapedString(allocator, &result, entry.key_ptr.*);
+        try result.appendSlice(allocator, "\":");
 
         // Add value (always quoted and escaped for Telegram API compatibility)
-        try result.append('"');
-        try appendEscapedString(&result, entry.value_ptr.*);
-        try result.append('"');
+        try result.append(allocator, '"');
+        try appendEscapedString(allocator, &result, entry.value_ptr.*);
+        try result.append(allocator, '"');
 
         first = false;
     }
-    try result.append('}');
+    try result.append(allocator, '}');
 
-    return result.toOwnedSlice();
+    return result.toOwnedSlice(allocator);
 }
 
 /// Marshal a struct specifically for Telegram API parameters
