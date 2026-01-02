@@ -405,6 +405,7 @@ pub fn unmarshalValue(comptime T: type, allocator: Allocator, json_value: std.js
                             } else if (field.defaultValue()) |default| {
                                 @field(result, field.name) = default;
                             } else {
+                                std.debug.print("\n[JSON DEBUG] Missing field '{s}' in struct '{s}'\n", .{ field.name, @typeName(T) });
                                 return JSONError.MissingField;
                             }
                         }

@@ -314,10 +314,12 @@ pub const Bot = struct {
 
         const header_buffer = try self.allocator.alloc(u8, 16384);
         defer self.allocator.free(header_buffer);
-        _ = try req.receiveHead(header_buffer);
+        var response = try req.receiveHead(header_buffer);
 
-        var reader = req.reader.interface;
-        const body = try reader.readAlloc(self.allocator, 1024 * 1024);
+        std.debug.print("HTTP Status Header: {}\n", .{response.head.status});
+
+        const body = try response.reader(&.{}).allocRemaining(self.allocator, .unlimited);
+        defer self.allocator.free(body);
         return body;
     }
 
