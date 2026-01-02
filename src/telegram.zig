@@ -309,17 +309,15 @@ pub const Bot = struct {
 
         self.debugPrint("Request JSON: {s}\n", .{json_str});
 
-        if (json_str.len > 2) { // More than just "{}"
-            req.transfer_encoding = .{ .content_length = json_str.len };
-            try req.sendBodyComplete(try self.allocator.dupe(u8, json_str));
-        } else {
-            try req.sendBodiless();
-        }
+        req.transfer_encoding = .{ .content_length = json_str.len };
+        _ = try req.sendBodyComplete(@constCast(json_str));
 
-        //try req.finish();
-        //try req.wait();
+        const header_buffer = try self.allocator.alloc(u8, 16384);
+        defer self.allocator.free(header_buffer);
+        _ = try req.receiveHead(header_buffer);
 
-        const body = try req.reader.interface.readAlloc(self.allocator, std.math.maxInt(usize));
+        var reader = req.reader.interface;
+        const body = try reader.readAlloc(self.allocator, 1024 * 1024);
         return body;
     }
 
@@ -2305,7 +2303,7 @@ pub const methods = struct {
 /// const update = try parseUpdate(allocator, json_value);
 /// defer update.deinit(allocator);
 /// ```
-pub fn parseUpdate(allocator: Allocator, value: std.json.Value) !Update {
+pub fn parseUpdate(allocator: Allocator, value: []const u8) !Update {
     return try json_utils.unmarshalTelegramResponse(Update, allocator, value);
 }
 
