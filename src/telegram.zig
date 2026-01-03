@@ -142,9 +142,11 @@ pub const HTTPClient = struct {
     /// Returns:
     ///     Initialized HTTPClient or error if allocation fails
     pub fn init(allocator: Allocator) !HTTPClient {
+        var client = std.http.Client{ .allocator = allocator };
+        try client.ca_bundle.rescan(allocator);
         return HTTPClient{
             .allocator = allocator,
-            .client = std.http.Client{ .allocator = allocator },
+            .client = client,
         };
     }
 
@@ -316,7 +318,7 @@ pub const Bot = struct {
         defer self.allocator.free(header_buffer);
 
         var response = try req.receiveHead(header_buffer);
-        std.debug.print("HTTP Status Header: {}\n", .{response.head.status});
+        // std.debug.print("HTTP Status Header: {}\n", .{response.head.status});
 
         const body = try response.reader(&.{}).allocRemaining(self.allocator, .unlimited);
         // const body = try req.reader.interface.readAlloc(self.allocator, std.math.maxInt(usize));
@@ -2639,5 +2641,31 @@ test "Memory management and cleanup" {
         try testing.expectEqualStrings("AgADrQADBREAAQ", file.file_unique_id);
         try testing.expectEqual(@as(i32, 1024), file.file_size.?);
         try testing.expectEqualStrings("photos/file_123.jpg", file.file_path.?);
+    }
+}
+
+test "TLS stress test" {
+    const allocator = std.testing.allocator;
+    const TOKEN = std.process.getEnvVarOwned(allocator, "TOKEN") catch {
+        return error.EnvironmentVariableNotFound;
+    };
+    defer allocator.free(TOKEN);
+
+    var client = try HTTPClient.init(allocator);
+    defer client.deinit();
+
+    try client.client.ca_bundle.rescan(allocator);
+
+    var bot = try Bot.init(allocator, TOKEN, &client);
+    defer bot.deinit();
+
+    var i: u32 = 0;
+    while (i < 20) : (i += 1) {
+        var params = std.StringHashMap([]const u8).init(allocator);
+        defer params.deinit();
+
+        const response = try bot.makeRequest("getMe", params);
+        allocator.free(response);
+        std.Thread.sleep(100 * std.time.ns_per_ms);
     }
 }
