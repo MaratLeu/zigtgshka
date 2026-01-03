@@ -2306,7 +2306,9 @@ pub const methods = struct {
 /// defer update.deinit(allocator);
 /// ```
 pub fn parseUpdate(allocator: Allocator, value: []const u8) !Update {
-    return try json_utils.unmarshalTelegramResponse(Update, allocator, value);
+    return json_utils.unmarshalTelegramResponse(Update, allocator, value) catch {
+        return BotError.JSONError;
+    };
 }
 
 // ===== UNIT TESTS =====
@@ -2411,27 +2413,29 @@ test "Update parsing from JSON" {
     {
         const json_string =
             \\{
-            \\  "update_id": 123456,
-            \\  "message": {
-            \\    "message_id": 1,
-            \\    "date": 1609459200,
-            \\    "text": "Hello, bot!",
-            \\    "from": {
-            \\      "id": 987654321,
-            \\      "is_bot": false,
-            \\      "first_name": "John",
-            \\      "username": "john_doe"
-            \\    },
-            \\    "chat": {
-            \\      "id": 987654321,
-            \\      "type": "private",
-            \\      "first_name": "John",
-            \\      "username": "john_doe"
+            \\  "ok": true,
+            \\  "result": {
+            \\    "update_id": 123456,
+            \\    "message": {
+            \\      "message_id": 1,
+            \\      "date": 1609459200,
+            \\      "text": "Hello, bot!",
+            \\      "from": {
+            \\        "id": 987654321,
+            \\        "is_bot": false,
+            \\        "first_name": "John",
+            \\        "username": "john_doe"
+            \\      },
+            \\      "chat": {
+            \\        "id": 987654321,
+            \\        "type": "private",
+            \\        "first_name": "John",
+            \\        "username": "john_doe"
+            \\      }
             \\    }
             \\  }
             \\}
         ;
-
         var update = try parseUpdate(allocator, json_string);
         defer update.deinit(allocator);
 
@@ -2449,16 +2453,19 @@ test "Update parsing from JSON" {
     {
         const json_string =
             \\{
-            \\  "update_id": 789012,
-            \\  "callback_query": {
-            \\    "id": "callback123",
-            \\    "from": {
-            \\      "id": 987654321,
-            \\      "is_bot": false,
-            \\      "first_name": "Alice"
-            \\    },
-            \\    "chat_instance": "chat_instance_123",
-            \\    "data": "button_clicked"
+            \\  "ok": true,
+            \\  "result": {
+            \\      "update_id": 789012,
+            \\      "callback_query": {
+            \\        "id": "callback123",
+            \\        "from": {
+            \\          "id": 987654321,
+            \\          "is_bot": false,
+            \\          "first_name": "Alice"
+            \\        },
+            \\        "chat_instance": "chat_instance_123",
+            \\        "data": "button_clicked"
+            \\     }
             \\  }
             \\}
         ;
@@ -2499,7 +2506,8 @@ test "API response structure parsing" {
             \\}
         ;
 
-        const result = try json_utils.unmarshalTelegramResponse(APIResponse, allocator, success_response);
+        const result = try json_utils.unmarshal(APIResponse, allocator, success_response);
+        defer json_utils.free(APIResponse, allocator, result);
 
         try testing.expectEqual(true, result.ok);
         try testing.expect(result.error_code == null);
@@ -2516,7 +2524,8 @@ test "API response structure parsing" {
             \\}
         ;
 
-        const result = try json_utils.unmarshalTelegramResponse(APIResponse, allocator, error_response);
+        const result = try json_utils.unmarshal(APIResponse, allocator, error_response);
+        defer json_utils.free(APIResponse, allocator, result);
 
         try testing.expectEqual(false, result.ok);
         try testing.expectEqual(@as(i32, 400), result.error_code.?);
@@ -2535,7 +2544,8 @@ test "API response structure parsing" {
             \\}
         ;
 
-        const result = try json_utils.unmarshalTelegramResponse(APIResponseWithResult, allocator, result_response);
+        const result = try json_utils.unmarshal(APIResponseWithResult, allocator, result_response);
+        defer json_utils.free(APIResponseWithResult, allocator, result);
 
         try testing.expectEqual(true, result.ok);
         try testing.expect(result.result != null);

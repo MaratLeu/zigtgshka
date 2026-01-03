@@ -216,6 +216,37 @@ pub fn cleanupParams(allocator: Allocator, params: *std.StringHashMap([]const u8
     params.deinit();
 }
 
+pub fn free(comptime T: type, allocator: Allocator, value: T) void {
+    const type_info = @typeInfo(T);
+
+    switch (type_info) {
+        .@"struct" => |info| {
+            inline for (info.fields) |field| {
+                const field_value = @field(value, field.name);
+                free(field.type, allocator, field_value);
+            }
+        },
+        .optional => |info| {
+            if (value) |v| {
+                free(info.child, allocator, v);
+            }
+        },
+        .pointer => |info| {
+            if (info.size == .slice) {
+                if (info.child == u8) {
+                    allocator.free(value);
+                } else {
+                    for (value) |item| {
+                        free(info.child, allocator, item);
+                    }
+                    allocator.free(value);
+                }
+            }
+        },
+        else => {},
+    }
+}
+
 // ===== PRIVATE HELPER FUNCTIONS =====
 
 /// Marshal a single value to JSON, appending to the result ArrayList
@@ -405,6 +436,20 @@ pub fn unmarshalValue(comptime T: type, allocator: Allocator, json_value: std.js
                             } else if (field.defaultValue()) |default| {
                                 @field(result, field.name) = default;
                             } else {
+                                std.debug.print("\n------------------------------------------------\n", .{});
+                                std.debug.print("❌ ERROR: Missing field '{s}'\n", .{field.name});
+                                std.debug.print("   In struct: {s}\n", .{@typeName(T)});
+                                std.debug.print("------------------------------------------------\n", .{});
+
+                                std.debug.print("🔍 Available keys in this JSON object:\n", .{});
+                                var it = obj.iterator();
+                                if (obj.count() == 0) {
+                                    std.debug.print("   (Object is empty!)\n", .{});
+                                }
+                                while (it.next()) |entry| {
+                                    std.debug.print("   - '{s}' (type: {s})\n", .{ entry.key_ptr.*, @tagName(entry.value_ptr.*) });
+                                }
+                                std.debug.print("------------------------------------------------\n", .{});
                                 std.debug.print("\n[JSON DEBUG] Missing field '{s}' in struct '{s}'\n", .{ field.name, @typeName(T) });
                                 return JSONError.MissingField;
                             }
@@ -428,6 +473,10 @@ pub fn unmarshalValue(comptime T: type, allocator: Allocator, json_value: std.js
                 },
                 else => JSONError.TypeMismatch,
             };
+        },
+        .@"union" => {
+            if (T == std.json.Value) return json_value;
+            return JSONError.UnsupportedType;
         },
         else => return JSONError.UnsupportedType,
     }
